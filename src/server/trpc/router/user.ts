@@ -38,13 +38,61 @@ export const userRouter = t.router({
   get_user: t.procedure
     .input(
       z.object({
-        email: z.string().email(),
+        id: z.string().nullish(),
+        email: z.string().email().nullish(),
       })
     )
     .query(async ({ input, ctx }) => {
-      const user = await ctx.pocketbase.records.getList("users", 1, 1, {
-        filter: `email = "${input.email}"`,
-      });
+      const { id, email } = input;
+
+      let user;
+
+      if (id) {
+        console.info(`getting user with id ${id}`);
+        user = await ctx.pocketbase.users.getOne(id);
+      } else if (email) {
+        console.info(`getting user with email ${email}`);
+        user = await ctx.pocketbase.users.getList(1, 1, {
+          filter: `email = '${email}'`,
+        });
+      }
+
       return user;
     }),
+  signin: t.procedure
+    .input(
+      z.object({
+        email: z.string(),
+        password: z.string(),
+        admin: z.boolean().default(false),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      if (input.admin) {
+        const rv = await ctx.pocketbase.admins.authViaEmail(
+          input.email,
+          input.password
+        );
+
+        console.log(rv);
+        return rv;
+      }
+
+      const rv = await ctx.pocketbase.users.authViaEmail(
+        input.email,
+        input.password
+      );
+
+      console.log(rv);
+      return rv;
+    }),
+  me: t.procedure.query(async ({ ctx }) => {
+    const user = await ctx.pocketbase.authStore.model;
+
+    return user;
+  }),
+  signout: t.procedure.mutation(async ({ ctx }) => {
+    await ctx.pocketbase.authStore.clear();
+    return true;
+  }),
 });
